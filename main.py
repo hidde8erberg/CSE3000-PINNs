@@ -1,12 +1,7 @@
 import torch
-import torch.nn as nn
+from matplotlib import pyplot as plt
+
 from european_call import EuropeanCall
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import norm, qmc
-from mpl_toolkits.mplot3d import Axes3D
-import pandas as pd
-from tqdm.auto import tqdm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
 
@@ -19,9 +14,14 @@ S = [0, 160]
 t_sample_size = 101
 S_sample_size = 101
 
-def main():
-    european_call = EuropeanCall(K, r, sigma, T, S).train(epochs=1000)
+if __name__ == '__main__':
+    european_call = EuropeanCall(K, r, sigma, T, S, t_sample_size, S_sample_size)
     # Analytical solution
     # c_ = np.array([ [ black_scholes_call(s, K, r, T[1]-t, sigma) for t in t_grid ] for s in s_grid ]).T
 
+    european_call.train(epochs=1000)
+
     european_call.plot()
+
+    plt.plot(european_call.data_loss)
+    plt.show()

@@ -5,6 +5,17 @@ from tqdm.auto import tqdm
 import numpy as np
 from scipy.stats import norm
 
+
+def black_scholes_call(underlying_price, strike_price, interest_rate, days_until_expiration, volatility):
+    time_to_expire = days_until_expiration / 365
+    d1 = (np.log(underlying_price / strike_price) + time_to_expire * (interest_rate + (volatility ** 2 / 2))) / (
+                volatility * np.sqrt(time_to_expire))
+    d2 = d1 - (volatility * np.sqrt(time_to_expire))
+    call = underlying_price * norm.cdf(d1, 0, 1) - strike_price * np.exp(
+        -interest_rate * time_to_expire) * norm.cdf(d2, 0, 1)
+    return call
+
+
 class EuropeanCall:
     def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size):
         self.K = K
@@ -33,15 +44,7 @@ class EuropeanCall:
         self.mesh = torch.cartesian_prod(self.S_samples, self.t_samples).requires_grad_(True)
 
         self.losses = []
-
-    def black_scholes_call(self, underlying_price, strike_price, interest_rate, days_until_expiration, volatility):
-        time_to_expire = days_until_expiration / 365
-        d1 = (np.log(underlying_price / strike_price) + time_to_expire * (interest_rate + (volatility ** 2 / 2))) / (
-                    volatility * np.sqrt(time_to_expire))
-        d2 = d1 - (volatility * np.sqrt(time_to_expire))
-        call = underlying_price * norm.cdf(d1, 0, 1) - strike_price * np.exp(
-            -interest_rate * time_to_expire) * norm.cdf(d2, 0, 1)
-        return call
+        self.data_loss = []
 
     def loss(self):
         # Boundary losses
@@ -61,11 +64,14 @@ class EuropeanCall:
         u = self.pinn(self.mesh)
         du = torch.autograd.grad(u, self.mesh, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
         dudt, duds = du[:, 0], du[:, 1]
-        d2uds2 = \
-        torch.autograd.grad(duds, self.mesh, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:,1]
+        d2uds2 = torch.autograd.grad(duds, self.mesh, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:,1]
 
         S1 = self.mesh[:, 1]
         pde_loss = (dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds - self.r * u).pow(2)
+
+        # data loss
+        analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)
+        self.data_loss.append((torch.squeeze(u) - analytical_solution).pow(2).mean())
 
         loss = pde_loss.mean() + boudary_loss.mean()
 
@@ -91,5 +97,5 @@ class EuropeanCall:
 
         c = self.pinn(self.mesh).detach().numpy().reshape(t_grid_mesh.shape).T
 
-        self.pinn.plot_surface(s_grid_mesh, t_grid_mesh, c, title='European Call Option')
+        plot_surface(s_grid_mesh, t_grid_mesh, c, title='European Call Option')
 

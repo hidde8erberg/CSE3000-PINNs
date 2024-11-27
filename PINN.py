@@ -1,5 +1,7 @@
+import torch
 from torch import nn
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class PINN(nn.Module):
@@ -34,12 +36,3 @@ class PINN(nn.Module):
         out = self.l4(out)
         return out
 
-    def plot_surface(self, x, y, z, title=''):
-        fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot(111, projection='3d', elev=30, azim=130)
-        surf = ax.plot_surface(x, y, z, cmap='viridis', edgecolor='none')
-        fig.colorbar(surf, shrink=0.5, aspect=10)
-        ax.set_xlabel('S')
-        ax.set_ylabel('t')
-        ax.set_zlabel('u')
-        plt.show()
