@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 def black_scholes_call(underlying_price, strike_price, interest_rate, days_until_expiration, volatility):
     time_to_expire = days_until_expiration / 365
-    d1 = (np.log(underlying_price / strike_price) + time_to_expire * (interest_rate + (volatility ** 2 / 2))) / (
+    d1 = (np.log(np.divide(underlying_price, strike_price)) + time_to_expire * (interest_rate + (volatility ** 2 / 2))) / (
                 volatility * np.sqrt(time_to_expire))
     d2 = d1 - (volatility * np.sqrt(time_to_expire))
     call = underlying_price * norm.cdf(d1, 0, 1) - strike_price * np.exp(
@@ -41,7 +41,7 @@ class EuropeanCall:
 
         self.pinn = PINN(2, 16, 1)
         self.mse_loss = nn.MSELoss()
-        self.optimizer = torch.optim.Adam(self.pinn.parameters(), lr=0.01)
+        self.optimizer = torch.optim.Adam(self.pinn.parameters(), lr=0.005)
 
         self.t_samples = torch.linspace(T[0], T[1], self.t_sample_size)
         self.S_samples = torch.linspace(S[0], S[1], self.S_sample_size)
@@ -83,26 +83,30 @@ class EuropeanCall:
 
     def loss(self):
         # Boundary losses
+        self.boundary1 = self.random_t_tensor(500, self.T, self.S[0])
         u = self.pinn(self.boundary1)
-        loss_boundary1 = self.mse_loss(torch.squeeze(u), torch.zeros_like(u))
+        loss_boundary1 = self.mse_loss(u, torch.zeros_like(u))
 
+        self.boundary2 = self.random_t_tensor(500, self.T, self.S[1])
         u = self.pinn(self.boundary2)
         S_inf = self.S[1] - self.K * torch.exp(-self.r * (self.T[1] - self.boundary2[:, 1]))
         loss_boundary2 = self.mse_loss(torch.squeeze(u), S_inf)
 
+        self.boundary3 = self.random_s_tensor(500, self.S, self.T[1])
         u = self.pinn(self.boundary3)
         loss_boundary3 = self.mse_loss(torch.squeeze(u), torch.fmax(self.boundary3[:, 0] - self.K, torch.tensor(0)))
 
         boudary_loss = loss_boundary1 + loss_boundary2 + loss_boundary3
 
         # PDE loss
+        self.mesh = self.random_mesh_tensor(2500, (self.S[0], self.S[1]), (self.T[0], self.T[1]))
         u = self.pinn(self.mesh)
         du = torch.autograd.grad(u, self.mesh, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
         dudt, duds = du[:, 0], du[:, 1]
         d2uds2 = torch.autograd.grad(duds, self.mesh, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:,1]
 
         S1 = self.mesh[:, 1]
-        pde_loss = self.mse_loss(dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds, self.r * u)
+        pde_loss = self.mse_loss(dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds, self.r * torch.squeeze(u))
 
         # data loss
         analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)
@@ -112,7 +116,7 @@ class EuropeanCall:
 
         return loss
 
-    def train(self, epochs=100):
+    def train(self, epochs):
         for i in tqdm(range(epochs)):
             self.optimizer.zero_grad()
 
