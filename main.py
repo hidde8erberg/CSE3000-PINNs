@@ -23,5 +23,5 @@ if __name__ == '__main__':
 
     european_call.plot()
 
-    plt.plot(european_call.data_loss)
-    plt.show()
+    # plt.plot(european_call.data_loss)
+    # plt.show()
