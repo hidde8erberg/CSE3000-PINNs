@@ -30,6 +30,13 @@ def plot_surface(x, y, z, title='', save=False):
         plt.savefig('plots/european_call.png', transparent=True)
     plt.show()
 
+def plot_analytical(S, K, r, T, sigma):
+    s_grid = np.linspace(S[0], S[1], 50)
+    t_grid = np.linspace(T[0], T[1], 50)
+    s_grid_mesh, t_grid_mesh = np.meshgrid(s_grid, t_grid)
+    bs = black_scholes_call(s_grid_mesh, K, r, T[1], sigma)
+    plot_surface(s_grid_mesh, t_grid_mesh, bs, '')
+
 
 class EuropeanCall:
     def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad):
