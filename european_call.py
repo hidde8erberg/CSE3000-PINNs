@@ -48,9 +48,9 @@ class EuropeanCall:
         self.t_sample_size = t_sample_size
         self.S_sample_size = S_sample_size
 
-        self.use_rad = use_rad = True
-        self.rad_k = 1
-        self.rad_c = 1
+        self.use_rad = use_rad
+        self.rad_k = 2
+        self.rad_c = 0
 
         self.pinn = PINN(2, 50, 1)
         self.mse_loss = nn.MSELoss()
@@ -116,7 +116,7 @@ class EuropeanCall:
         boudary_loss = loss_boundary1 + loss_boundary2 + loss_boundary3
 
         # RAD
-        if self.use_rad and iter > 0 and iter % 25 == 0:
+        if self.use_rad and iter > 0 and iter % 50 == 0:
             u = self.pinn(self.mesh_big)
             du = torch.autograd.grad(u, self.mesh_big, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
             dudt, duds = du[:, 0], du[:, 1]
@@ -128,6 +128,12 @@ class EuropeanCall:
             pde_pdf = pde_pdf / pde_pdf.sum()
             sample_idx = np.random.choice(a=len(u), size=self.mesh_size, replace=False, p=pde_pdf.detach().numpy())
             self.mesh = self.mesh_big[sample_idx]
+
+            # show the sampling
+            if iter == 9950:
+                plt.scatter(self.mesh.detach()[:, 0], self.mesh.detach()[:, 1], s=1)
+                plt.savefig('plots/sampling.png', transparent=True)
+                plt.show()
 
             self.boundary1 = self.random_t_tensor(self.boundary_size, self.T, self.S[0])
             self.boundary2 = self.random_t_tensor(self.boundary_size, self.T, self.S[1])
@@ -141,6 +147,9 @@ class EuropeanCall:
         S1 = self.mesh[:, 1]
 
         pde_loss = self.mse_loss(dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds, self.r * torch.squeeze(u))
+
+        # Early exercise loss
+
 
         # data loss
         # analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)
@@ -167,7 +176,7 @@ class EuropeanCall:
         plt.scatter(points[:, 0], points[:, 1], c=c, s=1, alpha=0.5)
         plt.show()
 
-    def plot(self):
+    def plot(self, save=False):
         s_grid = np.linspace(self.S[0], self.S[1], self.S_sample_size)
         t_grid = np.linspace(self.T[0], self.T[1], self.t_sample_size)
         s_grid_mesh, t_grid_mesh = np.meshgrid(s_grid, t_grid)
@@ -177,4 +186,4 @@ class EuropeanCall:
 
         c = self.pinn(u_mesh).detach().numpy().reshape(t_grid_mesh.shape)
 
-        plot_surface(s_grid_mesh, t_grid_mesh, c, save=False)
+        plot_surface(s_grid_mesh, t_grid_mesh, c, save=save)
