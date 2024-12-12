@@ -20,7 +20,7 @@ use_rad = False
 
 american_put = AmericanPut(K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad)
 
-american_put.train(epochs=2000)
+american_put.train(epochs=5000)
 american_put.plot(save=True)
 
 plt.plot(american_put.losses, label='PDE Loss')
@@ -32,5 +32,5 @@ plt.legend()
 # plt.savefig('plots/' + name, transparent=True)
 plt.show()
 
-plt.plot(np.linspace(0, 1, 100), american_put.fb(torch.linspace(0, 1, 100).unsqueeze(1)).detach())
-plt.show()
+# plt.plot(np.linspace(0, 1, 100), american_put.fb(torch.linspace(0, 1, 100).unsqueeze(1)).detach())
+# plt.show()
