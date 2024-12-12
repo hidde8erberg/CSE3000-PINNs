@@ -1,45 +1,16 @@
-import torch
+from matplotlib import pyplot as plt
 from torch import nn
-from PINN import PINN
-from tqdm.auto import tqdm
+import torch
 import numpy as np
-from scipy.stats import norm
-import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+from PINN import PINN
+from european_call import plot_surface
 
 
-def black_scholes_call(underlying_price, strike_price, interest_rate, days_until_expiration, volatility):
-    time_to_expire = days_until_expiration / 365
-    d1 = (np.log(np.divide(underlying_price, strike_price)) + time_to_expire * (interest_rate + (volatility ** 2 / 2))) / (
-                volatility * np.sqrt(time_to_expire))
-    d2 = d1 - (volatility * np.sqrt(time_to_expire))
-    call = underlying_price * norm.cdf(d1, 0, 1) - strike_price * np.exp(
-        -interest_rate * time_to_expire) * norm.cdf(d2, 0, 1)
-    return call
-
-
-def plot_surface(x, y, z, title='', save=False, angle=130):
-    fig = plt.figure(figsize=(8, 6))
-    ax = fig.add_subplot(111, projection='3d', elev=30, azim=angle)
-    surf = ax.plot_surface(x, y, z, cmap='viridis', edgecolor='none')
-    # fig.colorbar(surf, shrink=0.5, aspect=10)
-    ax.set_xlabel('S')
-    ax.set_ylabel('t')
-    ax.set_zlabel('u')
-    # ax.set_title(title)
-    if save:
-        plt.savefig('plots/european_call.png', transparent=True)
-    plt.show()
-
-def plot_analytical(S, K, r, T, sigma):
-    s_grid = np.linspace(S[0], S[1], 50)
-    t_grid = np.linspace(T[0], T[1], 50)
-    s_grid_mesh, t_grid_mesh = np.meshgrid(s_grid, t_grid)
-    bs = black_scholes_call(s_grid_mesh, K, r, T[1], sigma)
-    plot_surface(s_grid_mesh, t_grid_mesh, bs, '')
-
-
-class EuropeanCall:
+class AmericanPut:
     def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad):
+        # Black-Scholes Parameters
         self.K = K
         self.r = r
         self.sigma = sigma
@@ -48,40 +19,41 @@ class EuropeanCall:
         self.t_sample_size = t_sample_size
         self.S_sample_size = S_sample_size
 
+        # RAD Parameters
         self.use_rad = use_rad
-        self.rad_k = 2
-        self.rad_c = 0
+        self.rad_k = 1
+        self.rad_c = 1
+
+        self.boundary_size = 500
+        self.mesh_size = int(2500/4)
+        self.mesh_big_size = 100000
 
         self.pinn = PINN(2, 50, 1)
         self.mse_loss = nn.MSELoss()
         self.optimizer = torch.optim.Adam(self.pinn.parameters(), lr=0.001)
 
-        self.t_samples = torch.linspace(T[0], T[1], self.t_sample_size)
-        self.S_samples = torch.linspace(S[0], S[1], self.S_sample_size)
+        self.fb = FB(1, 15, 1)
+        self.fb_mse_loss = nn.MSELoss()
+        self.fb_optimizer = torch.optim.Adam(self.fb.parameters(), lr=0.01)
 
-        self.boundary_size = 500
-        self.mesh_size = 2500
-        self.mesh_big_size = 100000
+        self.t_samples = torch.rand(self.boundary_size) * (T[1] - T[0]) + T[0]
+        self.S_samples = torch.rand(self.boundary_size) * (S[1] - S[0]) + S[0]
 
         # Boundary: C(0,t) = 0
-        self.boundary1_uni = torch.stack((torch.full((self.t_sample_size,), S[0]), self.t_samples), dim=1).requires_grad_(True)
         self.boundary1 = self.random_t_tensor(self.boundary_size, T, S[0])
         # Bourdary: C(S->inf,t) = S-Ke^-r(T-t)
-        self.boundary2_uni = torch.stack((torch.full((self.t_sample_size,), S[1]), self.t_samples), dim=1).requires_grad_(True)
         self.boundary2 = self.random_t_tensor(self.boundary_size, T, S[1])
         # Boundary: C(S,T) = max(S-K, 0)
-        self.boundary3_uni = torch.stack((self.S_samples, torch.full((self.S_sample_size,), T[1])), dim=1).requires_grad_(True)
         self.boundary3 = self.random_s_tensor(self.boundary_size, S, T[1])
 
         # Mesh (S,t)
-        self.mesh_uni = torch.cartesian_prod(self.S_samples, self.t_samples).requires_grad_(True)
         self.mesh = self.random_mesh_tensor(self.mesh_size, (self.S[0], self.S[1]), (self.T[0], self.T[1]))
 
         # Big mesh to sample from
         self.mesh_big = self.random_mesh_tensor(self.mesh_big_size, (self.S[0], self.S[1]), (self.T[0], self.T[1]))
 
         self.losses = []
-        self.data_loss = []
+        self.fb_losses = []
 
     def random_mesh_tensor(self, size: int, range_x, range_y):
         return torch.stack((
@@ -103,17 +75,17 @@ class EuropeanCall:
 
     def loss(self, iter):
         # Boundary losses
-        u = self.pinn(self.boundary1)
-        loss_boundary1 = self.mse_loss(u, torch.zeros_like(u))
+        # u = self.pinn(self.boundary1)
+        # loss_boundary1 = self.mse_loss(u, torch.zeros_like(u))
 
         u = self.pinn(self.boundary2)
-        S_inf = self.S[1] - self.K * torch.exp(-self.r * (self.T[1] - self.boundary2[:, 1]))
-        loss_boundary2 = self.mse_loss(torch.squeeze(u), S_inf)
+        # S_inf = self.S[1] - self.K * torch.exp(-self.r * (self.T[1] - self.boundary2[:, 1]))
+        loss_boundary2 = self.mse_loss(u, torch.zeros_like(u))
 
         u = self.pinn(self.boundary3)
-        loss_boundary3 = self.mse_loss(torch.squeeze(u), torch.fmax(self.boundary3[:, 0] - self.K, torch.tensor(0)))
+        loss_boundary3 = self.mse_loss(torch.squeeze(u), torch.fmax(self.K - self.boundary3[:, 0], torch.tensor(0)))
 
-        boudary_loss = loss_boundary1 + loss_boundary2 + loss_boundary3
+        boudary_loss = loss_boundary2 + loss_boundary3
 
         # RAD
         if self.use_rad and iter > 0 and iter % 50 == 0:
@@ -123,14 +95,14 @@ class EuropeanCall:
             d2uds2 = torch.autograd.grad(duds, self.mesh_big, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:, 1]
             S1 = self.mesh_big[:, 1]
 
-            pde_pdf = (dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds - self.r * torch.squeeze(u)).abs()
+            pde_pdf = (dudt + 0.5 * self.sigma**2 * S1**2 * d2uds2 + self.r * S1 * duds - self.r * torch.squeeze(u)).abs()
             pde_pdf = pde_pdf**self.rad_k / (pde_pdf**self.rad_k).mean() + self.rad_c
             pde_pdf = pde_pdf / pde_pdf.sum()
             sample_idx = np.random.choice(a=len(u), size=self.mesh_size, replace=False, p=pde_pdf.detach().numpy())
             self.mesh = self.mesh_big[sample_idx]
 
             # show the sampling
-            if iter == 9950:
+            if iter == 1950:
                 plt.scatter(self.mesh.detach()[:, 0], self.mesh.detach()[:, 1], s=1)
                 plt.savefig('plots/sampling.png', transparent=True)
                 plt.show()
@@ -146,27 +118,50 @@ class EuropeanCall:
         d2uds2 = torch.autograd.grad(duds, self.mesh, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:,1]
         S1 = self.mesh[:, 1]
 
+        pde = dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds - (self.r * torch.squeeze(u))
+
+        # early = u - torch.max(S1 - self.K, torch.zeros_like(S1))
+        # pde_loss = self.mse_loss(pde*early, torch.zeros_like(pde*early))
         pde_loss = self.mse_loss(dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds, self.r * torch.squeeze(u))
+
+        # FB loss (early exercise)
+        fb_u = self.fb(torch.tensor([self.T[1]], dtype=torch.float))
+        fb_init_loss = self.fb_mse_loss(fb_u, torch.tensor([self.K], dtype=torch.float))
+
+        x = torch.stack((torch.squeeze(self.fb(self.t_samples.unsqueeze(1))), self.t_samples), dim=1)
+        u = self.pinn(x)
+        du = torch.autograd.grad(u, x, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
+        duds = du[:, 1]
+
+        fb_boundary3_loss = self.mse_loss(torch.squeeze(u), self.K - torch.squeeze(self.fb(self.t_samples.unsqueeze(1))))
+        fb_neu_loss = self.mse_loss(duds, torch.full_like(duds, -1))
+
+        fb_loss = (1/4) * (fb_init_loss + fb_boundary3_loss + fb_neu_loss)
 
         # data loss
         # analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)
         # self.data_loss.append(self.mse_loss(torch.squeeze(u), analytical_solution).item())
 
-        loss = pde_loss + boudary_loss
+        loss = pde_loss + boudary_loss #+ exercise_loss
 
-        return loss
+        return loss, fb_loss
 
     def train(self, epochs):
         for i in tqdm(range(epochs)):
             self.optimizer.zero_grad()
+            self.fb_optimizer.zero_grad()
 
-            loss = self.loss(i)
+            loss, fb_loss = self.loss(i)
             self.losses.append(loss.item())
+            self.fb_losses.append(fb_loss.item())
 
             loss.backward(retain_graph=True)
+            fb_loss.backward(retain_graph=True)
 
             self.optimizer.step()
+            self.fb_optimizer.step()
 
+        print('FB-Loss:', fb_loss.item())
         return self.pinn
 
     def plot_samples(self, points, c='r'):
@@ -183,4 +178,31 @@ class EuropeanCall:
 
         c = self.pinn(u_mesh).detach().numpy().reshape(t_grid_mesh.shape)
 
-        plot_surface(s_grid_mesh, t_grid_mesh, c, save=save)
+        plot_surface(s_grid_mesh, t_grid_mesh, c, save=save, angle=45)
+
+
+class FB(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(FB, self).__init__()
+
+        self.tanh = nn.Tanh()
+
+        self.l1 = nn.Linear(input_size, hidden_size)
+        self.l1.bias.data.fill_(0.0)
+        nn.init.xavier_uniform_(self.l1.weight)
+
+        self.l2 = nn.Linear(hidden_size, hidden_size)
+        self.l2.bias.data.fill_(0.0)
+        nn.init.xavier_uniform_(self.l2.weight)
+
+        self.l3 = nn.Linear(hidden_size, output_size)
+        self.l3.bias.data.fill_(0.0)
+        nn.init.xavier_uniform_(self.l3.weight)
+
+    def forward(self, x):
+        out = self.l1(x)
+        out = self.tanh(out)
+        out = self.l2(out)
+        out = self.tanh(out)
+        out = self.l3(out)
+        return out
