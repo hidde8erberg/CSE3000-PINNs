@@ -32,6 +32,7 @@ if __name__ == '__main__':
 
     plt.title(('Without ' if not use_rad else '') + 'RAD - Loss: ' + str(np.mean(losses)))
     name = ('no_rad' if not use_rad else 'rad') + '_loss' + str(datetime.now()) + '.png'
+    plt.yscale('log')
     plt.savefig('plots/' + name, transparent=True)
     plt.show()
     # european_call.plot_analytical(S, K, r, T, sigma)

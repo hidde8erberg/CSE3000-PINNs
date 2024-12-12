@@ -1,7 +1,4 @@
-import torch
 from torch import nn
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 
 class PINN(nn.Module):
@@ -35,4 +32,3 @@ class PINN(nn.Module):
         out = self.tanh(out)
         out = self.l4(out)
         return out
-
