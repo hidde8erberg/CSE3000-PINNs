@@ -25,6 +25,7 @@ american_put.plot(save=True)
 
 plt.plot(american_put.losses, label='PDE Loss')
 plt.plot(american_put.fb_losses, label='Early Exercise Loss')
+plt.plot(american_put.test_loss, label='Test Loss')
 plt.title(('Without ' if not use_rad else '') + 'RAD - Loss: ' + str(american_put.losses[-1]))
 plt.yscale('log')
 plt.legend()

@@ -7,7 +7,6 @@ from tqdm import tqdm
 from PINN import PINN
 from european_call import plot_surface
 
-
 class AmericanPut:
     def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad):
         # Black-Scholes Parameters
@@ -25,14 +24,14 @@ class AmericanPut:
         self.rad_c = 1
 
         self.boundary_size = 500
-        self.mesh_size = int(2500/4)
+        self.mesh_size = 2000
         self.mesh_big_size = 100000
 
-        self.pinn = PINN(2, 50, 1)
+        self.pinn = PINN(2, 16, 1)
         self.mse_loss = nn.MSELoss()
         self.optimizer = torch.optim.Adam(self.pinn.parameters(), lr=0.001)
 
-        self.fb = FB(1, 15, 1)
+        self.fb = FB(1, 8, 1)
         self.fb_mse_loss = nn.MSELoss()
         self.fb_optimizer = torch.optim.Adam(self.fb.parameters(), lr=0.01)
 
@@ -52,8 +51,25 @@ class AmericanPut:
         # Big mesh to sample from
         self.mesh_big = self.random_mesh_tensor(self.mesh_big_size, (self.S[0], self.S[1]), (self.T[0], self.T[1]))
 
+        # Uniform loss
+        self.uniform_mesh = torch.cartesian_prod(torch.linspace(S[0], S[1], 100),
+                                                 torch.linspace(T[0], T[1], 100)).requires_grad_(True)
+
         self.losses = []
+        self.test_loss = []
         self.fb_losses = []
+
+    def pde(self, x):
+        u = self.pinn(x)
+        du = torch.autograd.grad(u, x,
+                                 grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
+        dudt, duds = du[:, 0], du[:, 1]
+        d2uds2 = torch.autograd.grad(duds, x,
+                                     grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:, 1]
+        S1 = x[:, 1]
+
+        pde = dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds - (self.r * torch.squeeze(u))
+        return pde
 
     def random_mesh_tensor(self, size: int, range_x, range_y):
         return torch.stack((
@@ -142,6 +158,9 @@ class AmericanPut:
         # analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)
         # self.data_loss.append(self.mse_loss(torch.squeeze(u), analytical_solution).item())
 
+        test_loss = torch.norm(self.pde(self.uniform_mesh), p=2)
+        self.test_loss.append(test_loss.item())
+
         loss = pde_loss + boudary_loss #+ exercise_loss
 
         return loss, fb_loss
@@ -161,7 +180,6 @@ class AmericanPut:
             self.optimizer.step()
             self.fb_optimizer.step()
 
-        print('FB-Loss:', fb_loss.item())
         return self.pinn
 
     def plot_samples(self, points, c='r'):
