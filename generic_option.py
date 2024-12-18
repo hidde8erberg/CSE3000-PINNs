@@ -98,20 +98,10 @@ class GenericOption:
         return pde
 
     def loss(self, iter):
-        return 0
+        raise Exception('Not implemented')
 
     def train(self, epochs):
-        for i in tqdm(range(epochs)):
-            self.optimizer.zero_grad()
-
-            loss = self.loss(i)
-            self.losses.append(loss.item())
-
-            loss.backward(retain_graph=True)
-
-            self.optimizer.step()
-
-        return self.pinn
+        raise Exception('Not implemented')
 
     def plot_samples(self, points, c='r'):
         plt.scatter(points[:, 0], points[:, 1], c=c, s=1, alpha=0.5)
