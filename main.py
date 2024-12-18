@@ -17,11 +17,12 @@ t_sample_size = 500
 S_sample_size = 500
 
 
-def runs(rad, n_runs, epochs, k=2, c=1):
+def runs(rad, n_runs, epochs, rad_k=2, rad_c=1, rad_interval=50):
     losses = []
     final_losses = []
     for i in range(n_runs):
-        european_call = EuropeanCall(K, r, sigma, T, S, t_sample_size, S_sample_size, rad, rad_k=k, rad_c=c)
+        european_call = EuropeanCall(K, r, sigma, T, S, t_sample_size, S_sample_size, rad,
+                                     rad_k=rad_k, rad_c=rad_c, rad_interval=rad_interval)
         # Analytical solution
         # c_ = np.array([ [ black_scholes_call(s, K, r, T[1]-t, sigma) for t in t_grid ] for s in s_grid ]).T
         european_call.train(epochs=epochs)
@@ -39,20 +40,17 @@ def runs(rad, n_runs, epochs, k=2, c=1):
         losses.append(european_call.test_loss)
         final_losses.append(european_call.test_loss[-1])
 
-    plt.plot(np.mean(losses, axis=0), label=(f"RAD sampling k={k} c={c}" if rad else 'Normal sampling'))
+    plt.plot(np.mean(losses, axis=0), label=(f"RAD sampling - interval={rad_interval}" if rad else 'Normal sampling'))
     plt.fill_between(np.arange(len(losses[0])), np.min(losses, axis=0), np.max(losses, axis=0), alpha=0.5)
 
 
 if __name__ == '__main__':
-    runs(rad=True, n_runs=3, epochs=15000, k=1, c=1)
-    runs(rad=True, n_runs=3, epochs=15000, k=2, c=1)
-    runs(rad=True, n_runs=3, epochs=15000, k=1, c=0)
-    runs(rad=True, n_runs=3, epochs=15000, k=2, c=0)
-    runs(rad=True, n_runs=3, epochs=15000, k=4, c=0)
+    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=10)
+    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=50)
+    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=100)
+    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=500)
 
-    # runs(rad=False, n_runs=3, epochs=15000)
-
-    plt.title('Comparison of RAD sampling')
+    plt.title('Comparison of RAD intervals - with k=2 c=0')
     plt.xlabel('Iterations')
     plt.ylabel('MSE Loss')
     plt.yscale('log')

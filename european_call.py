@@ -6,10 +6,14 @@ from generic_option import GenericOption
 
 class EuropeanCall(GenericOption):
 
+    def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k=1, rad_c=1, rad_interval=50):
+        super().__init__(K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k, rad_c)
+
+        self.rad_interval = rad_interval
+
     def loss(self, iter):
         # RAD
-        rad_interval = 50
-        if self.use_rad and iter > 0 and iter % rad_interval == 0:
+        if self.use_rad and iter > 0 and iter % self.rad_interval == 0:
             pde_pdf = self.pde(self.mesh_big).abs()
             pde_pdf = pde_pdf**self.rad_k / (pde_pdf**self.rad_k).mean() + self.rad_c
             pde_pdf = pde_pdf / pde_pdf.sum()
