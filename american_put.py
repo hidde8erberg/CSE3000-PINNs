@@ -21,17 +21,20 @@ class AmericanPut(GenericOption):
 
     def loss(self, iter):
         # Boundary losses
-        # u = self.pinn(self.boundary1)
-        # loss_boundary1 = self.mse_loss(u, torch.zeros_like(u))
 
+        # Boundary S = 0
+        u = self.pinn(self.boundary1)
+        loss_boundary1 = self.mse_loss(u, torch.full_like(u, self.K))
+
+        # Boundary S -> inf
         u = self.pinn(self.boundary2)
-        # S_inf = self.S[1] - self.K * torch.exp(-self.r * (self.T[1] - self.boundary2[:, 1]))
         loss_boundary2 = self.mse_loss(u, torch.zeros_like(u))
 
+        # Initial condition at T
         u = self.pinn(self.boundary3)
         loss_boundary3 = self.mse_loss(torch.squeeze(u), torch.fmax(self.K - self.boundary3[:, 0], torch.tensor(0)))
 
-        boudary_loss = loss_boundary2 + loss_boundary3
+        boudary_loss = loss_boundary1 + loss_boundary2 + loss_boundary3
 
         # RAD
         if self.use_rad and iter > 0 and iter % 50 == 0:
@@ -47,12 +50,6 @@ class AmericanPut(GenericOption):
             sample_idx = np.random.choice(a=len(u), size=self.mesh_size, replace=False, p=pde_pdf.detach().numpy())
             self.mesh = self.mesh_big[sample_idx]
 
-            # show the sampling
-            # if iter == 1950:
-            #     plt.scatter(self.mesh.detach()[:, 0], self.mesh.detach()[:, 1], s=1)
-            #     plt.savefig('plots/sampling.png', transparent=True)
-            #     plt.show()
-
         # PDE loss
         u = self.pinn(self.mesh)
         du = torch.autograd.grad(u, self.mesh, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
@@ -60,10 +57,6 @@ class AmericanPut(GenericOption):
         d2uds2 = torch.autograd.grad(duds, self.mesh, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:,1]
         S1 = self.mesh[:, 1]
 
-        pde = dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds - (self.r * torch.squeeze(u))
-
-        # early = u - torch.max(S1 - self.K, torch.zeros_like(S1))
-        # pde_loss = self.mse_loss(pde*early, torch.zeros_like(pde*early))
         pde_loss = self.mse_loss(dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds, self.r * torch.squeeze(u))
 
         # FB loss (early exercise)
@@ -78,7 +71,6 @@ class AmericanPut(GenericOption):
         fb_boundary3_loss = self.mse_loss(torch.squeeze(u), self.K - torch.squeeze(self.fb(self.t_samples.unsqueeze(1))))
         fb_neu_loss = self.mse_loss(duds, torch.full_like(duds, -1))
 
-        fb_loss = (1/4) * (fb_init_loss + fb_boundary3_loss + fb_neu_loss)
 
         # data loss
         # analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)

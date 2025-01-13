@@ -77,7 +77,7 @@ class EuropeanCall(GenericOption):
 
     def train(self, epochs):
         for i in tqdm(range(epochs)):
-            self.optimizer.zero_grad()
+            self.optimizer.zerok_grad()
 
             loss = self.loss(i)
             self.losses.append(loss.item())

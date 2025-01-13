@@ -40,23 +40,26 @@ def runs(rad, n_runs, epochs, rad_k=2, rad_c=1, rad_interval=50):
         losses.append(european_call.test_loss)
         final_losses.append(european_call.test_loss[-1])
 
-    plt.plot(np.mean(losses, axis=0), label=(f"RAD sampling - interval={rad_interval}" if rad else 'Normal sampling'))
-    plt.fill_between(np.arange(len(losses[0])), np.min(losses, axis=0), np.max(losses, axis=0), alpha=0.5)
+    avg_losses = np.mean(losses, axis=0)
+    std_losses = np.std(losses, axis=0)
+    plt.plot(avg_losses, label=(f"RAD sampling - interval={rad_interval}" if rad else 'Normal sampling'))
+    plt.fill_between(np.arange(len(losses[0])), avg_losses - std_losses, avg_losses + std_losses, alpha=0.5)
 
 
 if __name__ == '__main__':
-    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=10)
-    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=50)
-    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=100)
-    runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=500)
-
-    plt.title('Comparison of RAD intervals - with k=2 c=0')
-    plt.xlabel('Iterations')
-    plt.ylabel('MSE Loss')
-    plt.yscale('log')
-    plt.legend()
-    # name = ('no_rad' if not use_rad else 'rad') + '_loss' + str(datetime.now()) + '.png'
-    name = 'comparison' + str(datetime.now()) + '.png'
-    plt.savefig('plots/' + name, transparent=True)
-    plt.show()
-    # european_call.plot_analytical(S, K, r, T, sigma)
+    # runs(rad=True, n_runs=2, epochs=16000, rad_k=2, rad_c=0, rad_interval=10)
+    # runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=50)
+    # runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=100)
+    # runs(rad=True, n_runs=3, epochs=15000, rad_k=2, rad_c=0, rad_interval=500)
+    #
+    # plt.title('Comparison of RAD intervals - with k=2 c=0')
+    # plt.xlabel('Iterations')
+    # plt.ylabel('MSE Loss')
+    # plt.yscale('log')
+    # plt.legend()
+    # name = 'comparison' + str(datetime.now()) + '.png'
+    # plt.savefig('plots/' + name, transparent=False)
+    # plt.show()
+    european_call = EuropeanCall(K, r, sigma, T, S, t_sample_size, S_sample_size, True,
+                                 rad_k=1, rad_c=1, rad_interval=50)
+    european_call.plot_analytical()

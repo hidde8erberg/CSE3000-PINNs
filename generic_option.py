@@ -37,13 +37,13 @@ class GenericOption:
         self.boundary3_weight = 1e-0
         self.pde_weight = 1e+0
 
-        # Boundary: C(0,t) = 0
+        # Boundary1: V(0,t)
         self.boundary1_uni = torch.stack((torch.full((self.t_sample_size,), S[0]), self.t_samples), dim=1).requires_grad_(True)
         self.boundary1 = self.random_t_tensor(self.boundary_size, T, S[0])
-        # Boundary: C(S->inf,t) = S-Ke^-r(T-t)
+        # Boundary2: V(S->inf,t)
         self.boundary2_uni = torch.stack((torch.full((self.t_sample_size,), S[1]), self.t_samples), dim=1).requires_grad_(True)
         self.boundary2 = self.random_t_tensor(self.boundary_size, T, S[1])
-        # Boundary: C(S,T) = max(S-K, 0)
+        # Boundary3: V(S,T)
         self.boundary3_uni = torch.stack((self.S_samples, torch.full((self.S_sample_size,), T[1])), dim=1).requires_grad_(True)
         self.boundary3 = self.random_s_tensor(self.boundary_size, S, T[1])
 
@@ -117,17 +117,19 @@ class GenericOption:
                 - strike_price * np.exp(-interest_rate * time_to_expire) * norm.cdf(d2, 0, 1))
         return call
 
-    def plot_surface(self, x, y, z, title='', save=False, angle=130):
+    def plot_surface(self, x, y, z, title='', save=False, angle=220):
         fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot(111, projection='3d', elev=30, azim=angle)
+
+        # ax = fig.add_subplot(111, projection='3d', elev=30, azim=angle)
+        ax = plt.axes(projection='3d', elev=30, azim=angle)
         surf = ax.plot_surface(x, y, z, cmap='viridis', edgecolor='none')
-        # fig.colorbar(surf, shrink=0.5, aspect=10)
+        fig.colorbar(surf, shrink=0.5, aspect=10)
         ax.set_xlabel('S')
         ax.set_ylabel('t')
         ax.set_zlabel('u')
         # ax.set_title(title)
         if save:
-            plt.savefig('plots/european_call.png', transparent=True)
+            plt.savefig('paper_plots/euro_solution.png')
         plt.show()
 
     def plot_analytical(self):
@@ -135,7 +137,7 @@ class GenericOption:
         t_grid = np.linspace(self.T[0], self.T[1], 50)
         s_grid_mesh, t_grid_mesh = np.meshgrid(s_grid, t_grid)
         bs = self.black_scholes_call(s_grid_mesh, self.K, self.r, self.T[1], self.sigma)
-        self.plot_surface(s_grid_mesh, t_grid_mesh, bs, '')
+        self.plot_surface(s_grid_mesh, t_grid_mesh, bs,'', save=True)
 
     def plot(self, save=False):
         s_grid = np.linspace(self.S[0], self.S[1], self.S_sample_size)
