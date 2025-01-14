@@ -57,12 +57,17 @@ class EuropeanCall(GenericOption):
         # self.data_loss.append(self.mse_loss(torch.squeeze(u), analytical_solution).item())
 
         # Test loss
-        test_loss = torch.norm(self.pde(self.uniform_mesh), p=2)
+        u = self.pde(self.uniform_mesh)
+        test_loss = self.mse_loss(u, torch.zeros_like(u))
         self.pde_test_loss.append(test_loss.item())
-        test_loss += (torch.norm(self.pde(self.boundary1_uni), p=2)
-                      + torch.norm(self.pde(self.boundary2_uni), p=2)
-                      + torch.norm(self.pde(self.boundary3_uni), p=2))
-        self.test_loss.append(test_loss.item() + boundary_loss.item())
+
+        u = self.pinn(self.boundary1_uni)
+        test_loss += self.mse_loss(u, torch.zeros_like(u))
+        u = self.pinn(self.boundary2_uni)
+        test_loss += self.mse_loss(u, S_inf)
+        u = self.pinn(self.boundary3_uni)
+        test_loss += self.mse_loss(torch.squeeze(u), torch.fmax(self.boundary3_uni[:, 0] - self.K, torch.tensor(0)))
+        self.test_loss.append(test_loss.item())
 
         self.boundary_loss.append(boundary_loss.item())
         self.boundary_loss1.append(loss_boundary1.item())
@@ -77,7 +82,7 @@ class EuropeanCall(GenericOption):
 
     def train(self, epochs):
         for i in tqdm(range(epochs)):
-            self.optimizer.zerok_grad()
+            self.optimizer.zero_grad()
 
             loss = self.loss(i)
             self.losses.append(loss.item())

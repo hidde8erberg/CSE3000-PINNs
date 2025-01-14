@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 class GenericOption:
-    def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k=1, rad_c=1):
+    def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k=1, rad_c=1, lr=0.001):
         self.K = K
         self.r = r
         self.sigma = sigma
@@ -18,12 +18,12 @@ class GenericOption:
         self.S_sample_size = S_sample_size
 
         self.use_rad = use_rad
-        self.rad_k = 2
-        self.rad_c = 1
+        self.rad_k = rad_k
+        self.rad_c = rad_c
 
         self.pinn = PINN(2, 16, 1)
         self.mse_loss = nn.MSELoss()
-        self.optimizer = torch.optim.Adam(self.pinn.parameters(), lr=0.001)
+        self.optimizer = torch.optim.Adam(self.pinn.parameters(), lr=lr)
 
         self.t_samples = torch.linspace(T[0], T[1], self.t_sample_size)
         self.S_samples = torch.linspace(S[0], S[1], self.S_sample_size)

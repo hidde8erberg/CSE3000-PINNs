@@ -10,8 +10,10 @@ from generic_option import GenericOption
 
 class AmericanPut(GenericOption):
 
-    def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k=1, rad_c=1):
-        super().__init__(K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k, rad_c)
+    def __init__(self, K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k=1, rad_c=1, rad_interval=50):
+        super().__init__(K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad, rad_k, rad_c, lr=0.001)
+
+        self.rad_interval = rad_interval
 
         self.fb = FB(1, 8, 1)
         self.fb_mse_loss = nn.MSELoss()
@@ -37,8 +39,8 @@ class AmericanPut(GenericOption):
         boudary_loss = loss_boundary1 + loss_boundary2 + loss_boundary3
 
         # RAD
-        if self.use_rad and iter > 0 and iter % 50 == 0:
-            u = self.pinn(self.mesh_big)
+        if self.use_rad and iter > 0 and iter % self.rad_interval == 0:
+            u = self.pde(self.mesh_big)
             du = torch.autograd.grad(u, self.mesh_big, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
             dudt, duds = du[:, 0], du[:, 1]
             d2uds2 = torch.autograd.grad(duds, self.mesh_big, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:, 1]
@@ -51,13 +53,8 @@ class AmericanPut(GenericOption):
             self.mesh = self.mesh_big[sample_idx]
 
         # PDE loss
-        u = self.pinn(self.mesh)
-        du = torch.autograd.grad(u, self.mesh, grad_outputs=torch.ones_like(u), retain_graph=True, create_graph=True)[0]
-        dudt, duds = du[:, 0], du[:, 1]
-        d2uds2 = torch.autograd.grad(duds, self.mesh, grad_outputs=torch.ones_like(duds), retain_graph=True, create_graph=True)[0][:,1]
-        S1 = self.mesh[:, 1]
-
-        pde_loss = self.mse_loss(dudt + 0.5 * self.sigma ** 2 * S1 ** 2 * d2uds2 + self.r * S1 * duds, self.r * torch.squeeze(u))
+        u = self.pde(self.mesh)
+        pde_loss = self.mse_loss(u, torch.zeros_like(u))
 
         # FB loss (early exercise)
         fb_u = self.fb(torch.tensor([self.T[1]], dtype=torch.float))
@@ -71,13 +68,22 @@ class AmericanPut(GenericOption):
         fb_boundary3_loss = self.mse_loss(torch.squeeze(u), self.K - torch.squeeze(self.fb(self.t_samples.unsqueeze(1))))
         fb_neu_loss = self.mse_loss(duds, torch.full_like(duds, -1))
 
+        fb_loss = fb_init_loss + fb_boundary3_loss + fb_neu_loss
 
-        # data loss
-        # analytical_solution = black_scholes_call(self.mesh[:, 0].detach(), self.K, self.r, self.T[1] - self.mesh[:, 1].detach(), self.sigma)
-        # self.data_loss.append(self.mse_loss(torch.squeeze(u), analytical_solution).item())
+        u = self.pde(self.uniform_mesh)
+        pde_uni_loss = self.mse_loss(torch.squeeze(u), torch.zeros_like(u))
+        self.pde_loss.append(pde_uni_loss.item())
+        u = self.pinn(self.boundary1_uni)
+        b1_test_loss = self.mse_loss(u, torch.full_like(u, self.K))
+        self.boundary_loss1.append(b1_test_loss.item())
+        u = self.pinn(self.boundary2_uni)
+        b2_test_loss = self.mse_loss(u, torch.zeros_like(u))
+        self.boundary_loss2.append(b2_test_loss.item())
+        u = self.pinn(self.boundary3_uni)
+        b3_test_loss = self.mse_loss(torch.squeeze(u), torch.fmax(self.K - self.boundary3_uni[:, 0], torch.tensor(0)))
+        self.boundary_loss3.append(b3_test_loss.item())
 
-        test_loss = torch.norm(self.pde(self.uniform_mesh), p=2)
-        self.test_loss.append(test_loss.item())
+        self.test_loss.append(pde_uni_loss.item()+b1_test_loss.item()+b2_test_loss.item()+b3_test_loss.item())
 
         loss = pde_loss + boudary_loss
 

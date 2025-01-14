@@ -8,25 +8,26 @@ from american_put import AmericanPut
 device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
 
 # Black-Scholes Parameters
-K = 50
+K = 100
 r = 0.05
 sigma = 0.1
 T = [0.0, 1.0]
-S = [10, 100]
-t_sample_size = 101
-S_sample_size = 101
+S = [80, 160]
+t_sample_size = 500
+S_sample_size = 500
 
 use_rad = False
 
-american_put = AmericanPut(K, r, sigma, T, S, t_sample_size, S_sample_size, use_rad)
+american_put = AmericanPut(K, r, sigma, T, S, t_sample_size, S_sample_size, True,
+                                         rad_k=1, rad_c=1, rad_interval=50)
 
-american_put.train(epochs=5000)
-american_put.plot(save=True)
-
-plt.plot(american_put.losses, label='PDE Loss')
+american_put.train(epochs=10000)
+plt.plot(american_put.pde_test_loss, label='PDE Loss')
+plt.plot(american_put.test_loss, label='test Loss')
 plt.plot(american_put.fb_losses, label='Early Exercise Loss')
-plt.plot(american_put.test_loss, label='Test Loss')
-plt.title(('Without ' if not use_rad else '') + 'RAD - Loss: ' + str(american_put.losses[-1]))
+plt.plot(american_put.boundary_loss1, label='Test Loss boundary 1')
+plt.plot(american_put.boundary_loss2, label='Test Loss boundary 2')
+plt.plot(american_put.boundary_loss3, label='Test Loss boundary 3')
 plt.yscale('log')
 plt.legend()
 # name = ('no_rad' if not use_rad else 'rad') + '_loss' + str(datetime.now()) + '.png'
