@@ -29,10 +29,6 @@ class EuropeanCall(GenericOption):
                 # plt.savefig('plots/sampling.png', transparent=True)
                 # plt.show()
 
-            # self.boundary1 = self.random_t_tensor(self.boundary_size, self.T, self.S[0])
-            # self.boundary2 = self.random_t_tensor(self.boundary_size, self.T, self.S[1])
-            # self.boundary3 = self.random_s_tensor(self.boundary_size, self.S, self.T[1])
-
         # PDE loss
         pde = self.pde(self.mesh)
         pde_loss = self.pde_weight * self.mse_loss(pde, torch.zeros_like(pde))

@@ -30,9 +30,4 @@ plt.plot(american_put.boundary_loss2, label='Test Loss boundary 2')
 plt.plot(american_put.boundary_loss3, label='Test Loss boundary 3')
 plt.yscale('log')
 plt.legend()
-# name = ('no_rad' if not use_rad else 'rad') + '_loss' + str(datetime.now()) + '.png'
-# plt.savefig('plots/' + name, transparent=True)
 plt.show()
-
-# plt.plot(np.linspace(0, 1, 100), american_put.fb(torch.linspace(0, 1, 100).unsqueeze(1)).detach())
-# plt.show()
